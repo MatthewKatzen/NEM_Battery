@@ -1,3 +1,14 @@
+#load packages
+library(tidyverse)
+library(tidyr)
+library(lubridate)
+library(data.table)
+library(janitor)
+library(readxl)
+library(writexl)
+library(xtable)
+Sys.setenv(TZ='UTC')
+
 data_location <- "D:/NEM_LMP/Data/Raw"
 Price <- fread(paste0(data_location, "/dispatchprice_24-01-2020.csv")) %>% clean_names() %>% 
   filter(intervention == 0) %>% #remove all intervention prices, they dont actually change anything. Just an indicator
@@ -9,15 +20,21 @@ Price <- fread(paste0(data_location, "/dispatchprice_24-01-2020.csv")) %>% clean
   mutate(rrp30 = mean(rrp)) %>% 
   as.data.frame()
 
-LPA <- fread(paste0(data_location, "/dispatch_local_price_24-01-2020.csv")) %>% clean_names() %>% 
+Adjustment <- fread(paste0(data_location, "/dispatch_local_price_24-01-2020.csv")) %>% clean_names() %>% 
   mutate(settlementdate = ymd_hms(settlementdate)) %>% 
   select(-locally_constrained)
 
-head(LPA)
-head(Price)
+Generator_details <- fread("D:/NEM_LMP/Data/Raw/generator_details_cleaned.csv")
 
-temp <- inner_join(LPA, Price, by = "settlementdate")
-temp2 <- temp %>% mutate(lmp = rrp + local_price_adjustment)
-temp2$lmp %>% max()
-temp2$lmp %>% min()
-temp2 %>% filter(settlementdate == "2019-06-04 08:00:00", duid == "GSTONE4")
+
+LMP <- inner_join(Adjustment, Generator_details, by = "duid") %>% 
+  right_join(Price, by = c("settlementdate", "region")) %>% 
+  mutate(lmp = rrp + if_else(is.na(local_price_adjustment), 0, local_price_adjustment))
+
+Latlon <- fread("C:/Users/matta/Dropbox/RA/Battery/DUID_latlon.csv") %>% clean_names()
+
+Mean_LMP <- LMP %>% group_by(duid) %>% summarise(mean_lmp = mean(lmp))
+
+Output <- Mean_LMP %>% right_join(Latlon, by = "duid") %>% filter(!is.na(mean_lmp))
+write.csv(Output, "Output.csv")
+                                              
