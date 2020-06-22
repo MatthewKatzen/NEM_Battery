@@ -74,5 +74,5 @@ merged_data <- price %>% left_join(generator_details, by = "region") %>% #merge 
                                     12900,
                                   TRUE ~ lmp))
 
-fwrite(merged_data, "D:/Battery/Data/merged_data.csv")
+fwrite(merged_data, "D:/Battery/Data/full_lmp.csv")
 
