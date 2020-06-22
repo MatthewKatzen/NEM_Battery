@@ -71,28 +71,30 @@ reg_coeffs %>% pivot_longer(cols = alpha_mc) %>% filter(name == "alpha_mc") %>%
 reg_coeffs %>% left_join(generator_details, by = "duid") %>% 
   fwrite("Output/coeffs.csv")
 
+reg_coeffs <- fread("Output/coeffs.csv")
+
 # buy low, sell high with LMPmc
 
 profit <- lmp_data %>% 
   group_by(duid, date = floor_date(settlementdate, "day")) %>% 
-  summarise(dif_lmp = max(lmp) - min(lmp), #for each day, buy at min price sell at max
-            dif_lmp_mc = max(lmp_mc) - min(lmp_mc),
-            dif_rrp = max(rrp) - min(rrp),
-            dif_lmp_90 = 0.9*max(lmp) - min(lmp), #90% efficiency
-            dif_lmp_mc_90 = 0.9*max(lmp_mc) - min(lmp_mc),
-            dif_rrp_90 = 0.9*max(rrp) - min(rrp)) %>% 
+  summarise(#dif_lmp = max(lmp) - min(lmp), #for each day, buy at min price sell at max
+            #dif_lmp_mc = max(lmp_mc) - min(lmp_mc),
+            #dif_rrp = max(rrp) - min(rrp),
+            dif_lmp = 0.9*max(lmp) - min(lmp), #90% efficiency
+            dif_lmp_mc = 0.9*max(lmp_mc) - min(lmp_mc),
+            dif_rrp = 0.9*max(rrp) - min(rrp)) %>% 
   ungroup() %>% 
   group_by(duid) %>%
-  summarise(profit_lmp = sum(dif_lmp),
+  summarise(#profit_lmp = sum(dif_lmp),
+            #profit_lmp_mc = sum(dif_lmp_mc),
+            #profit_rrp = sum(dif_rrp),
+            profit_lmp = sum(dif_lmp),
             profit_lmp_mc = sum(dif_lmp_mc),
-            profit_rrp = sum(dif_rrp),
-            profit_lmp_90 = sum(dif_lmp_90),
-            profit_lmp_mc_90 = sum(dif_lmp_mc_90),
-            profit_rrp_90 = sum(dif_rrp_90)) %>% #calculate yearly profit
+            profit_rrp = sum(dif_rrp)) %>% #calculate yearly profit
   left_join(generator_details, by = "duid") #add generator details
 
 
-fwrite(profit, "Output/profit_mc.csv")
+fwrite(profit, "Output/profit.csv")
 
 # Latlons
 
@@ -105,10 +107,10 @@ latlon <- read.csv("https://services.aremi.data61.io/aemo/v6/csv/all", stringsAs
   mutate(duid = ifelse(duid == "ARFW1", "ARWF1", duid)) #duid mislabel
 
 
-latlon_stats <- reg_coeffs %>% ungroup() %>% 
-  left_join(profit, by = "duid") %>% 
-  left_join(latlon %>% select(-region), by = "duid") %>% 
+output_latlon <- reg_coeffs %>% ungroup() %>% 
+  left_join(profit %>% select(duid, profit_lmp, profit_lmp_mc, profit_rrp), by = "duid") %>% 
+  left_join(latlon %>% select(duid, lat, lon), by = "duid") %>% 
   mutate_if(is.numeric, funs(`percentile` = ntile(.,100))) %>% 
-  select(-lat_percentile, -lon_percentile, -profit_rrp_90_percentile, -profit_rrp_percentile)
+  select(-lat_percentile, -lon_percentile, -profit_rrp_percentile)
 
-fwrite(latlon_stats, "Output/latlon_stats.csv")
+fwrite(output_latlon, "Output/output_latlon.csv")
