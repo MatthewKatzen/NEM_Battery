@@ -98,7 +98,7 @@ fwrite(profit, "Output/profit.csv")
 
 # Latlons
 
-profit <- fread("Output/profit_mc.csv")
+profit <- fread("Output/profit.csv")
 
 latlon <- read.csv("https://services.aremi.data61.io/aemo/v6/csv/all", stringsAsFactors = FALSE) %>% 
   clean_names() %>% 
@@ -114,3 +114,4 @@ output_latlon <- reg_coeffs %>% ungroup() %>%
   select(-lat_percentile, -lon_percentile, -profit_rrp_percentile)
 
 fwrite(output_latlon, "Output/output_latlon.csv")
+

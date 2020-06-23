@@ -35,10 +35,12 @@ price <- fread(paste0(data_location, "/dispatchprice_24-01-2020.csv")) %>% clean
 
 ### Merge
 
-merged_data <- price %>% left_join(generator_details, by = "region") %>% #merge dataframes
+merged_data <- price %>% 
+  left_join(generator_details, by = "region") %>% #merge dataframes
   left_join(adjustment, by = c("settlementdate", "duid")) %>% 
   mutate(local_price_adjustment = coalesce(local_price_adjustment, 0)) %>% #convert NA to 0
-  mutate(lmp = rrp + local_price_adjustment) %>% 
+  mutate(lmp = case_when(type == "Gen" ~ rrp + local_price_adjustment,
+                         type == "Load" ~ rrp - local_price_adjustment)) %>% 
   mutate(lmp = case_when((lmp < -1000) ~ (-1000), #censoring at price cap and floor
                                   ((lmp > 14700) & 
                                      settlementdate %within% interval(ymd_hms("2019-07-01 00:05:00 UTC"), 
