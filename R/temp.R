@@ -18,6 +18,15 @@ monthly_output <- fread("D:/Battery/Data/Nemsight/monthly_station_output2.csv") 
 some_output_stations <- monthly_output %>% group_by(station) %>% filter(any(value != 0)) %>% .[["station"]] %>% unique()
 
 #which gens started/stopped in 2019?
-monthly_output %>% group_by(station) %>% filter(any(value != 0) & any(value == 0)) %>% .[["station"]] %>% unique()
+stopstart_stations <- monthly_output %>% group_by(station) %>% filter(any(value != 0) & any(value == 0)) %>% .[["station"]] %>% unique()
 
-output_latlon_2 <- output_latlon %>% filter(station %in% some_output_stations)
+temp <- monthly_output %>% filter(station %in% stopstart_stations)
+
+#manually check which gens are commissioned in 2019
+
+commissioned_duids <- c("Barker Inlet Power Station", "Beryl Solar Farm", "Childers Solar Farm", "Clermont Solar Farm", "Coopers Gap Wind Farm", "Finely Solar Farm", "Haughton Solar Farm Stage 1 Units 1-81",
+  "Lake Bonney BESS1", "Lilyvale Solar Farm", "Limondale Solar Farm 2", "Lincoln Gap Wind Farm", "Murra Warra Wind Farm",
+  "NEVERTIRE SOLAR FARM", "Numurkah Solar Farm", "Oakey 1 Solar Farm", "Oakey 2 Solar Farm", "Rugby Run Solar Farm", "Tailem Bend Solar Project 1",
+  "Yendon Wind Farm")
+
+generator_details %>% filter(station %in% commissioned_duids)

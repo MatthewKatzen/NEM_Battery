@@ -21,6 +21,20 @@ full_vom_mc <- fread("D:/Battery/Data/MC/full_vom_mc.csv") %>%
   mutate(day = ymd(day)) %>% 
   filter(year(day) == 2019)
 
+# merge in chunks
+f <- function(x, pos) x %>% 
+  select(settlementdate, duid, lmp, rrp) %>% 
+  mutate(settlementdate = ymd_hms(settlementdate)) %>% 
+  mutate(day = ymd(floor_date(settlementdate, "day"))) %>% 
+  left_join(full_vom_mc, by = c("duid", "day")) %>% #merge lmp data with vom_mc
+  mutate(lmp_mc = ifelse(lmp>vom_mc, lmp, vom_mc)) %>% #create LMPmc
+  select(-day, -vom_mc)  #remove vars
+
+lmp_data <- read_csv_chunked("D:/Battery/Data/full_lmp.csv", DataFrameCallback$new(f), chunk_size = 2000000)
+ 
+
+fwrite(lmp_data, "D:/Battery/Data/full_lmp_mc_filtered.csv")
+
 #remove Gens that are actually running (data from nemsight)
 monthly_output <- fread("D:/Battery/Data/Nemsight/monthly_station_output2.csv") %>% 
   pivot_longer(-"Monthly") %>% 
@@ -31,26 +45,15 @@ monthly_output <- fread("D:/Battery/Data/Nemsight/monthly_station_output2.csv") 
 
 some_output_duid <- monthly_output %>% group_by(station) %>% filter(any(value != 0)) %>% .[["duid"]] %>% unique()
 
-# merge in chunks
-f <- function(x, pos) x %>% 
-  select(settlementdate, duid, lmp, rrp) %>% 
-  mutate(settlementdate = ymd_hms(settlementdate)) %>% 
-  mutate(day = ymd(floor_date(settlementdate, "day"))) %>% 
-  left_join(full_vom_mc, by = c("duid", "day")) %>% #merge lmp data with vom_mc
-  mutate(lmp_mc = ifelse(lmp>vom_mc, lmp, vom_mc)) %>% #create LMPmc
-  select(-day, -vom_mc) %>%  #remove vars
-  filter(duid %in% some_output_duid) #filter only duids which actually generate
+lmp_data_filtered <- lmp_data %>% filter(duid %in% some_output_duid) #filter only duids which actually generate
 
-lmp_data <- read_csv_chunked("D:/Battery/Data/full_lmp.csv", DataFrameCallback$new(f), chunk_size = 2000000)
- 
-
-fwrite(lmp_data, "D:/Battery/Data/full_lmp_mc_filtered.csv")
+fwrite(lmp_data_filtered, "D:/Battery/Data/full_lmp_mc_filtered.csv")
 
 # Read data again if needed
 f <- function(x, pos) x %>% 
   mutate(settlementdate = ymd_hms(settlementdate)) 
 
-lmp_data <- read_csv_chunked("D:/Battery/Data/full_lmp_mc.csv", DataFrameCallback$new(f), chunk_size = 2000000)
+lmp_data <- read_csv_chunked("D:/Battery/Data/full_lmp_mc_filtered.csv", DataFrameCallback$new(f), chunk_size = 2000000)
 
 ### Regressions
 
@@ -117,10 +120,20 @@ latlon <- read.csv("https://services.aremi.data61.io/aemo/v6/csv/all", stringsAs
 
 
 output_latlon <- reg_coeffs %>% ungroup() %>% 
-  left_join(profit %>% select(duid, profit_lmp, profit_lmp_mc, profit_rrp), by = "duid") %>% 
+  left_join(profit %>% select(duid, station, fuel_type, profit_lmp, profit_lmp_mc, profit_rrp), by = "duid") %>% 
   left_join(latlon %>% select(duid, lat, lon), by = "duid") %>% 
   mutate_if(is.numeric, funs(`percentile` = ntile(.,100))) %>% 
   select(-lat_percentile, -lon_percentile, -profit_rrp_percentile)
+
+
+#manually check which gens are commissioned in 2019
+
+commissioned_stations <- c("Barker Inlet Power Station", "Beryl Solar Farm", "Childers Solar Farm", "Clermont Solar Farm", "Coopers Gap Wind Farm", "Finely Solar Farm", "Haughton Solar Farm Stage 1 Units 1-81",
+                        "Lake Bonney BESS1", "Lilyvale Solar Farm", "Limondale Solar Farm 2", "Lincoln Gap Wind Farm", "Murra Warra Wind Farm",
+                        "NEVERTIRE SOLAR FARM", "Numurkah Solar Farm", "Oakey 1 Solar Farm", "Oakey 2 Solar Farm", "Rugby Run Solar Farm", "Tailem Bend Solar Project 1",
+                        "Yendon Wind Farm")
+
+output_latlon <- output_latlon %>% mutate(commission_2019 = (station %in% commissioned_duids))
 
 fwrite(output_latlon, "Output/output_latlon.csv")
 
