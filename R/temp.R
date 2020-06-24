@@ -1,30 +1,23 @@
-### Dalrymple
+# When do batteries start?
+lmp_data %>% filter(duid %in% c("BALBG1", "BALBL1", "DALNTH01", "DALNTHL1", "GANNBG1", "GANNBL1", "HPRG1", "HPRL1", "LBBG1", "LBBL1"),
+                    lmp!=rrp) %>% 
+  group_by(duid) %>% summarise(min(settlementdate))
 
-lmp_data %>% filter(duid %in% c("DALNTHL1","DALNTH01"), lmp!=rrp) 
-#S>NIL_HUWT_STBG2
-#coefficients are +-1 opposite
-#constraint is stopping all flow along line
+#checked nemsight, Lake Bonney only one commissioned in Oct 2019
 
-#S>NIL_BWMP_HUWT
-#2019-02-04 03:55:00
-#+-1
+#gens which aren't constrained
+temp <- lmp_data %>% group_by(duid) %>% filter(all(lmp==rrp)) %>% summarise(n()) %>% 
+  left_join(generator_details, by = "duid")
 
-lmp_data %>% filter(duid %in% c("HPRG1","HPRL1"), lmp!=rrp) %>% head()
+#Gens that are actually running (data from nemsight)
+monthly_output <- fread("D:/Battery/Data/Nemsight/monthly_station_output2.csv") %>% 
+  pivot_longer(-"Monthly") %>% 
+  clean_names() %>% 
+  rename(station = name)
 
-lmp_data %>% filter(duid %in% c("HPRG1","HPRL1")) %>% 
-  group_by(settlementdate) %>% filter(any(lmp!=rrp))
+some_output_stations <- monthly_output %>% group_by(station) %>% filter(any(value != 0)) %>% .[["station"]] %>% unique()
 
-lmp_data %>% filter(duid %in% c("HPRG1","HPRL1")) %>% #both gen and load different to rrp
-  group_by(settlementdate) %>% filter(all(lmp!=rrp))
+#which gens started/stopped in 2019?
+monthly_output %>% group_by(station) %>% filter(any(value != 0) & any(value == 0)) %>% .[["station"]] %>% unique()
 
-#Check Nemsight for quantity of battery
-gen_data <- fread("D:/NEM_LMP/Data/Raw/INITIALMW/2019-01.csv")
-
-temp <- gen_data %>% filter(duid %in% c("DALNTHL1","DALNTH01")) 
-temp2 <- lmp_data %>% filter(duid %in% c("DALNTHL1","DALNTH01"), lmp!=rrp) 
-
-lmp_data %>% filter(duid %in% c("DALNTHL1","DALNTH01"), lmp!=rrp) %>% 
-  group_by(settlementdate) %>% filter(all(lmp>0))
-
-lmp_data %>% filter(duid %in% c("LBBG1","LBBL1"), lmp!=rrp) %>% 
-  group_by(settlementdate) %>% filter(all(lmp>0), abs(lmp-rrp)>10)
+output_latlon_2 <- output_latlon %>% filter(station %in% some_output_stations)

@@ -15,13 +15,21 @@ Sys.setenv(TZ='UTC')
 
 #Load data
 generator_details <- fread("D:/NEM_LMP/Data/Raw/generator_details_cleaned.csv") %>% 
-  select(-c(loss_factor, emission_factor, participant)) %>% 
-  filter(schedule_type != "Non-scheduled")
+  select(-c(loss_factor, emission_factor, participant))
 
 full_vom_mc <- fread("D:/Battery/Data/MC/full_vom_mc.csv") %>% 
   mutate(day = ymd(day)) %>% 
   filter(year(day) == 2019)
 
+#remove Gens that are actually running (data from nemsight)
+monthly_output <- fread("D:/Battery/Data/Nemsight/monthly_station_output2.csv") %>% 
+  pivot_longer(-"Monthly") %>% 
+  clean_names() %>% 
+  rename(station = name) %>% 
+  left_join(generator_details, by = "station") %>% #merge to get duids
+  filter(schedule_type != "Non-scheduled") #remove non-scheduled gens
+
+some_output_duid <- monthly_output %>% group_by(station) %>% filter(any(value != 0)) %>% .[["duid"]] %>% unique()
 
 # merge in chunks
 f <- function(x, pos) x %>% 
@@ -30,12 +38,13 @@ f <- function(x, pos) x %>%
   mutate(day = ymd(floor_date(settlementdate, "day"))) %>% 
   left_join(full_vom_mc, by = c("duid", "day")) %>% #merge lmp data with vom_mc
   mutate(lmp_mc = ifelse(lmp>vom_mc, lmp, vom_mc)) %>% #create LMPmc
-  select(-day, -vom_mc) #remove vars
+  select(-day, -vom_mc) %>%  #remove vars
+  filter(duid %in% some_output_duid) #filter only duids which actually generate
 
 lmp_data <- read_csv_chunked("D:/Battery/Data/full_lmp.csv", DataFrameCallback$new(f), chunk_size = 2000000)
  
 
-fwrite(lmp_data, "D:/Battery/Data/full_lmp_mc.csv")
+fwrite(lmp_data, "D:/Battery/Data/full_lmp_mc_filtered.csv")
 
 # Read data again if needed
 f <- function(x, pos) x %>% 
@@ -115,3 +124,4 @@ output_latlon <- reg_coeffs %>% ungroup() %>%
 
 fwrite(output_latlon, "Output/output_latlon.csv")
 
+output_latlon <- fread("Output/output_latlon.csv")
