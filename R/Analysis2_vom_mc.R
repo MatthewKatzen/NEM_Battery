@@ -119,8 +119,8 @@ latlon <- read.csv("https://services.aremi.data61.io/aemo/v6/csv/all", stringsAs
   mutate(duid = ifelse(duid == "ARFW1", "ARWF1", duid)) #duid mislabel
 
 
-output_latlon <- reg_coeffs %>% ungroup() %>% 
-  left_join(profit %>% select(duid, station, fuel_type, profit_lmp, profit_lmp_mc, profit_rrp), by = "duid") %>% 
+output_latlon <- profit %>% select(duid, station, fuel_type, region, profit_lmp, profit_lmp_mc, profit_rrp) %>% 
+  left_join(reg_coeffs %>% select(duid, alpha_mc, beta_mc), by = "duid") %>% 
   left_join(latlon %>% select(duid, lat, lon), by = "duid") %>% 
   mutate_if(is.numeric, funs(`percentile` = ntile(.,100))) %>% 
   select(-lat_percentile, -lon_percentile, -profit_rrp_percentile)
@@ -133,7 +133,7 @@ commissioned_stations <- c("Barker Inlet Power Station", "Beryl Solar Farm", "Ch
                         "NEVERTIRE SOLAR FARM", "Numurkah Solar Farm", "Oakey 1 Solar Farm", "Oakey 2 Solar Farm", "Rugby Run Solar Farm", "Tailem Bend Solar Project 1",
                         "Yendon Wind Farm")
 
-output_latlon <- output_latlon %>% mutate(commission_2019 = (station %in% commissioned_duids))
+output_latlon <- output_latlon %>% mutate(commission_2019 = (station %in% commissioned_stations))
 
 fwrite(output_latlon, "Output/output_latlon.csv")
 
