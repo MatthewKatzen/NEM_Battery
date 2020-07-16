@@ -35,7 +35,7 @@ lmp_data <- read_csv_chunked("D:/Battery/Data/full_lmp.csv", DataFrameCallback$n
 
 fwrite(lmp_data, "D:/Battery/Data/full_lmp_mc_filtered.csv")
 
-#remove Gens that are actually running (data from nemsight)
+#remove Gens that aren't actually running (data from nemsight)
 monthly_output <- fread("D:/Battery/Data/Nemsight/monthly_station_output2.csv") %>% 
   pivot_longer(-"Monthly") %>% 
   clean_names() %>% 
@@ -53,39 +53,67 @@ fwrite(lmp_data_filtered, "D:/Battery/Data/full_lmp_mc_filtered.csv")
 f <- function(x, pos) x %>% 
   mutate(settlementdate = ymd_hms(settlementdate)) 
 
-lmp_data <- read_csv_chunked("D:/Battery/Data/full_lmp_mc_filtered.csv", DataFrameCallback$new(f), chunk_size = 2000000)
+lmp_data_allduids <- read_csv_chunked("D:/Battery/Data/full_lmp_mc_filtered.csv", DataFrameCallback$new(f), chunk_size = 2000000)
 
 ### Regressions
 
-reg <- lmp_data %>% 
+# LMP ~ RRP
+reg <- lmp_data_allduids %>% 
+  group_by(duid) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~lm(lmp ~ rrp, data = .)))
+
+reg_coeffs <- reg %>% 
+  mutate(alpha = model[[n()]] %>% summary() %>% coefficients() %>% .[1,1],
+         beta = model[[n()]] %>% summary() %>% coefficients() %>% .[2,1]) %>% 
+  select(duid, alpha, beta)
+
+reg_coeffs %>% pivot_longer(cols = beta) %>% filter(name == "beta") %>% 
+  ggplot(aes(x = value))+
+  geom_histogram()+
+  facet_wrap(~name) + 
+  ggsave("Output/Regressions/beta.png")
+
+reg_coeffs %>% pivot_longer(cols = alpha) %>% filter(name == "alpha") %>% 
+  ggplot(aes(x = value))+
+  geom_histogram()+
+  facet_wrap(~name) + 
+  ggsave("Output/Regressions/alpha.png")
+
+
+reg_coeffs %>% left_join(generator_details, by = "duid") %>% 
+  fwrite("Output/Regressions/coeffs.csv")
+
+
+# LMP_mc ~ RRP
+reg_mc <- lmp_data_allduids %>% 
   group_by(duid) %>% 
   nest() %>% 
   mutate(model = map(data, ~lm(lmp_mc ~ rrp, data = .)))
 
-reg_coeffs <- reg %>% 
+reg_coeffs_mc <- reg_mc %>% 
   mutate(alpha_mc = model[[n()]] %>% summary() %>% coefficients() %>% .[1,1],
          beta_mc = model[[n()]] %>% summary() %>% coefficients() %>% .[2,1]) %>% 
   select(duid, alpha_mc, beta_mc)
 
-reg_coeffs %>% pivot_longer(cols = beta_mc) %>% filter(name == "beta_mc") %>% 
+reg_coeffs_mc %>% pivot_longer(cols = beta_mc) %>% filter(name == "beta_mc") %>% 
   ggplot(aes(x = value))+
   geom_histogram()+
   facet_wrap(~name) + 
-  ggsave("Output/beta_mc.png")
+  ggsave("Output/Regressions/beta_mc.png")
 
-reg_coeffs %>% pivot_longer(cols = alpha_mc) %>% filter(name == "alpha_mc") %>% 
+reg_coeffs_mc %>% pivot_longer(cols = alpha_mc) %>% filter(name == "alpha_mc") %>% 
   ggplot(aes(x = value))+
   geom_histogram()+
   facet_wrap(~name) + 
-  ggsave("Output/alpha_mc.png")
+  ggsave("Output/Regressions/alpha_mc.png")
 
 
-reg_coeffs %>% left_join(generator_details, by = "duid") %>% 
-  fwrite("Output/coeffs.csv")
+reg_coeffs_mc %>% left_join(generator_details, by = "duid") %>% 
+  fwrite("Output/Regressions/coeffs_mc.csv")
 
-reg_coeffs <- fread("Output/coeffs.csv")
 
-# buy low, sell high with LMPmc
+## buy low, sell high with LMPmc
 
 profit <- lmp_data %>% 
   group_by(duid, date = floor_date(settlementdate, "day")) %>% 

@@ -1,4 +1,6 @@
-#Analysis 
+#Analysis1
+#buy low sell high
+#alpha beta
 
 #load packages
 library(tidyverse)
