@@ -18,7 +18,8 @@ library(scales)
 Sys.setenv(TZ='UTC')
 
 
-### load data
+### LOAD/CLEAN DATA
+
 #generator details
 generator_details <- fread("D:/NEM_LMP/Data/Raw/generator_details_cleaned.csv") %>% 
   select(-c(loss_factor, emission_factor, participant)) %>% 
@@ -62,7 +63,7 @@ f <- function(x, pos) x %>% clean_names() %>%  #only keep half hourly rows
 battery_data_2019 <- map_dfr(paste0("D:/NEM_LMP/Data/RAW/INITIALMW/2019-",str_pad(c(1:12), 2, pad = "0"),".csv"),
                              ~read_csv_chunked(.,DataFrameCallback$new(f), chunk_size = 2000000))
 
-### Battery rev rrp and lmp
+# merge Battery rev rrp and lmp
 
 battery_and_price_data <- lmp_data  %>%  
   left_join(battery_data_2019, by = c("duid", "settlementdate")) %>% #add dispatch data
@@ -70,6 +71,14 @@ battery_and_price_data <- lmp_data  %>%
   mutate(initialmw = case_when(is.na(initialmw) ~ 0,
                                type == "Load" ~ -initialmw,
                                type == "Gen" ~ initialmw))
+
+fwrite(battery_and_price_data, "D:/Battery/Data/battery_and_price_data.csv")
+
+### READ IN DATA AFTER CLEAN
+
+battery_and_price_data <- fread("D:/Battery/Data/battery_and_price_data.csv") %>% 
+  mutate(settlementdate = ymd_hms(settlementdate)) %>% 
+  mutate(interval = ymd_hms(interval))
 
 
 #daily under each of lmp, lmpmc, rrp30
@@ -186,3 +195,5 @@ daily_battery_output %>% left_join(generator_details %>% select(station, region)
 daily_battery_output %>% group_by(station, quarter) %>% 
   summarise(charge_ave = mean(rrp30[netMWh>0]),
             discharge_ave = mean(rrp30[netMWh<0]))
+
+

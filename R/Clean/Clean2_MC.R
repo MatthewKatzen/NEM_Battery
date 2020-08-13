@@ -259,7 +259,7 @@ full_vom_mc <- full_join(full_vom, full_mc, by = c("duid", "day")) %>%
   mutate(vom_mc = mc + adjusted_vom) %>% 
   select(duid, day, vom_mc)
 
-full_vom_mc %>% fwrite("D:/Battery/Data/MC/full_vom_mc.csv")
+fwrite(full_vom_mc, "D:/Battery/Data/MC/full_vom_mc.csv")
 
 
 

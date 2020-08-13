@@ -48,11 +48,12 @@ f <- function(x, pos) x %>% clean_names() %>%  #only keep half hourly rows
   group_by(settlementdate, duid) %>% 
   filter(intervention == max(intervention)) %>% #if intervention, keep it and remove int==0)
   ungroup() %>% 
-  select(-intervention) %>% #remove intervention var
-  mutate(settlementdate_30min = ceiling_date(settlementdate, "30 minutes"))
+  select(-intervention) #remove intervention var
+  
 
 battery_data_2019 <- map_dfr(paste0("D:/NEM_LMP/Data/RAW/INITIALMW/2019-",str_pad(c(1:12), 2, pad = "0"),".csv"),
-                        ~read_csv_chunked(.,DataFrameCallback$new(f), chunk_size = 2000000))
+                        ~read_csv_chunked(.,DataFrameCallback$new(f), chunk_size = 2000000)) %>% 
+  mutate(settlementdate_30min = ceiling_date(settlementdate, "30 minutes"))
 
 #which batteries run all year?
 battery_data_2019 %>% group_by(duid) %>% summarise(min(settlementdate), max(settlementdate))

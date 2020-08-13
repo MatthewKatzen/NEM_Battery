@@ -1,4 +1,4 @@
-#Analysis 2, vom_mc
+#Analysis 2
 #Same as Analysis.R but using vom_mc data to get LMPmc
 
 #load packages
