@@ -33,6 +33,8 @@ price <- fread(paste0(data_location, "/dispatchprice_24-01-2020.csv")) %>% clean
   select(settlementdate, region, rrp, rrp30) %>% 
   filter(year(settlementdate)==2019)
 
+fwrite(price, "D:/Data/Cleaned/RRP/2019_RRP.csv")
+
 ### Merge
 
 merged_data <- price %>% 

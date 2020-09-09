@@ -1,5 +1,6 @@
-#MC analysis
+#Clean_2_MC
 #
+#Get vom+mc to calculate lmp_mc
 #Get All MC for each duid from 2013-2019
 # MC ($/Gj) = FuelPrice ($/GJ) * 3.6 (GJ/MWh) * 1/thermal efficiency (how much input needed for one output)
 

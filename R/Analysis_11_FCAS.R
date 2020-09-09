@@ -137,10 +137,13 @@ merged <- dispatch %>% left_join(generator_details %>% select(duid, station, reg
   mutate(category = case_when(var %in% c("raisereg", "lowerreg") ~ "reg",
                               TRUE ~ "cont"))
 
-fwrite(merged, "D:/Battery/Data/FCAS/fcas_merged_noint.csv")
+fwrite(merged, "D:/Data/Cleaned/FCAS/fcas_merged_noint.csv")
 
 ### ANALYSIS
 ##########################################################
+
+merged <- fread("D:/Data/Cleaned/FCAS/merged/fcas_merged_noint.csv")
+
 merged <- merged %>% 
   mutate(rev = value*price/12)
 

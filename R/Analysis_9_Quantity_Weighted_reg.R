@@ -1,8 +1,7 @@
 #Analysis_9_Quantity_Weighted_reg
 
-#calculates quantity weighted average for regression
-#NOTE: data only contains observations where initialmw>0, when initialmw!=0 it doesnt affact QWA
-# %notin% function in file func.R
+# Run 9_2_UNcapped first
+# We will cap from here
 
 ### load packages
 library(tidyverse)
@@ -18,51 +17,38 @@ library(scales)
 library(zoo)
 Sys.setenv(TZ='UTC')
 
-# create data
+# CREATE DATA 
+################################
+generator_details_AEMO <- fread("D:/Data/RAW/AEMO/Website/generators_and_loads.csv") %>% clean_names() %>% 
+  distinct(duid, .keep_all = TRUE)
 
-lmp_data <- fread("D:/Battery/Data/full_lmp_mc_filtered.csv") %>% 
-  mutate(settlementdate = ymd_hms(settlementdate)) 
+full_data_capped <- fread("D:/Data/Cleaned/INITIALMW/full_lmp_uncapped_initialmw.csv") %>% 
+  mutate(settlementdate = ymd_hms(settlementdate)) %>% 
+  left_join(generator_details_AEMO %>% select(duid, dispatch_type), by = "duid") %>% 
+  filter(dispatch_type == "Generator") %>% select(-dispatch_type) %>% #remove loads
+  mutate(lmp = case_when(lmp < (-1000) ~ (-1000),
+                               lmp > 15000 ~ 15000,
+                               TRUE ~ lmp))
 
 
-map2(paste0("D:/NEM_LMP/Data/RAW/INITIALMW/2019-",str_pad(c(1:12), 2, pad = "0"),".csv"), #data from
-     paste0("D:/Battery/Data/Monthly/INITIALMW_LMP_2019-",str_pad(c(1:12), 2, pad = "0"),".csv"), #data to
-     ~fread(.x) %>% clean_names() %>%  
-      filter(initialmw > 0) %>% #only keep pos initialmw
-      mutate(settlementdate = ymd_hms(settlementdate)) %>% 
-      group_by(settlementdate, duid) %>% 
-      filter(intervention == max(intervention)) %>% #if intervention, keep it and remove int==0)
-      ungroup() %>% 
-      select(-intervention) %>% 
-      left_join(lmp_data, by = c("settlementdate", "duid")) %>% #merge with lmp
-      fwrite(.y))
+weighted_data_capped <- full_data_capped %>% 
+   group_by(settlementdate) %>% 
+  mutate(qw_lmp = sum(initialmw*lmp)/sum(initialmw),
+         qw_rrp = sum(initialmw*rrp)/sum(initialmw))
 
-full_data <- map_df(paste0("D:/Battery/Data/Monthly/",list.files("D:/Battery/Data/Monthly/")),
-                   ~fread(.x) %>% 
-                     mutate(settlementdate = ymd_hms(settlementdate)))
-
-weighted_data <- full_data %>% 
-  filter(year(settlementdate)==2019, #remove 2020-01-01
-         duid %notin% c("RT_VIC1", "RT_SA1", "RT_VIC2", "RT_VIC3", "DG_SA1" )) %>% #remove weird extra initialmw vals, think its to do w emergency reserves
-  mutate(prod_initialmw_lmp = initialmw*lmp,
-         prod_initialmw_lmp_mc = initialmw*lmp_mc) %>% 
-  group_by(settlementdate) %>% 
-  mutate(qw_lmp = sum(prod_initialmw_lmp)/sum(initialmw),
-         qw_lmp_mc = sum(prod_initialmw_lmp_mc)/sum(initialmw)) 
-
-fwrite(weighted_data, "D:/Battery/Data/Quantity Weighted/full_lmp_quantity_weighted.csv")
+fwrite(weighted_data_capped, "D:/Data/Cleaned/Quantity Weighted/full_lmp_capped_quantity_weighted.csv")
 
 #Load data
+#############################
 
-weighted_data <- fread("D:/Battery/Data/Quantity Weighted/full_lmp_quantity_weighted.csv") %>% 
+weighted_data_capped <- fread("D:/Battery/Data/Quantity Weighted/full_lmp_quantity_weighted.csv") %>% 
   mutate(settlementdate = ymd_hms(settlementdate))
 
-generator_details <- fread("D:/NEM_LMP/Data/Raw/generator_details_cleaned.csv") %>% 
-  select(-c(loss_factor, emission_factor, participant)) %>% 
-  filter(schedule_type != "Non-scheduled")
 
 # Regression
+####################################
 
-reg <- weighted_data %>% 
+reg <- weighted_data_capped %>% 
   group_by(duid) %>% 
   nest() %>% 
   mutate(model = map(data, ~lm(lmp ~ qw_lmp, data = .)))
@@ -71,7 +57,7 @@ reg_coeffs <- reg %>%
   mutate(alpha = model[[n()]] %>% summary() %>% coefficients() %>% .[1,1],
          beta = model[[n()]] %>% summary() %>% coefficients() %>% .[2,1]) %>% 
   select(duid, alpha, beta) %>% 
-  left_join(generator_details, by = "duid")
+  left_join(generator_details_AEMO, by = "duid")
 
 fwrite(reg_coeffs, "D:/Battery/Data/Quantity Weighted/reg_coeffs.csv")
 
@@ -107,65 +93,8 @@ reg_coeffs %>%
   ggsave("Output/Regressions/Weighted Average/weighted_ave_beta_region.png")
 
 reg_coeffs %>% 
-  ggplot(aes(x = beta, fill = fuel_type))+
+  ggplot(aes(x = beta, fill = technology_type_descriptor))+
   geom_histogram()+ 
   ggsave("Output/Regressions/Weighted Average/weighted_ave_beta_fueltype.png")
 
-reg_coeffs %>% 
-  ggplot(aes(x = beta, fill = type))+
-  geom_histogram() + 
-  ggsave("Output/Regressions/Weighted Average/weighted_ave_beta_genload.png")
-
-
-#alphas
-reg_coeffs %>% filter(alpha<1000) %>% 
-  ggplot(aes(x = alpha, fill = fuel_type))+
-  geom_histogram()
-
-reg_coeffs %>% filter(alpha<1000) %>% 
-  ggplot(aes(x = alpha, fill = region))+
-  geom_histogram()+ 
-  ggsave("Output/Regressions/Weighted Average/weighted_ave_alpha_region.png")
-
-reg_coeffs %>% filter(alpha<1000) %>% 
-  ggplot(aes(x = alpha, fill = fuel_type))+
-  geom_histogram()+ 
-  ggsave("Output/Regressions/Weighted Average/weighted_ave_alpha_fueltype.png")
-
-reg_coeffs %>% filter(alpha<1000) %>% 
-  ggplot(aes(x = alpha, fill = (beta<1)))+
-  geom_histogram()+ 
-  ggsave("Output/Regressions/Weighted Average/weighted_ave_alpha_by_beta.png")
-
-reg_coeffs %>% filter(alpha<1000) %>% 
-  ggplot(aes(x = alpha, fill = type))+
-  geom_histogram() + 
-  ggsave("Output/Regressions/Weighted Average/weighted_ave_alpha_genload.png")
-
-#LMP_mc
-
-reg_mc <- weighted_data %>% 
-  group_by(duid) %>% 
-  nest() %>% 
-  mutate(model = map(data, ~lm(lmp_mc ~ qw_lmp_mc, data = .)))
-
-reg_coeffs_mc <- reg_mc %>% 
-  mutate(alpha = model[[n()]] %>% summary() %>% coefficients() %>% .[1,1],
-         beta = model[[n()]] %>% summary() %>% coefficients() %>% .[2,1]) %>% 
-  select(duid, alpha, beta) %>% 
-  left_join(generator_details, by = "duid")
-
-reg_coeffs_mc %>% 
-  ggplot(aes(x = beta))+
-  geom_histogram()+
-  ggsave("Output/Regressions/Weighted Average/weighted_ave_beta_mc.png")
-
-reg_coeffs_mc %>% 
-  ggplot(aes(x = alpha))+
-  geom_histogram() + 
-  ggsave("Output/Regressions/Weighted Average/weighted_ave_alpha_mc.png")
-
-
-reg_coeffs %>% 
-  fwrite("Output/Regressions/Weighted Average/weighted_ave_coeffs_mc.csv")
 
