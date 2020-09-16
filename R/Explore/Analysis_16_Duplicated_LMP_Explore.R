@@ -82,7 +82,12 @@ map(c(1:12),
 weighted_data_uncapped_cleaned <- map_dfr(list.files("D:/Data/Cleaned/Quantity Weighted/Duplication/Month/", full.names = TRUE),
                                           ~fread(.x))
 
+#with qw
 fwrite(weighted_data_uncapped_cleaned %>% select(-station,-intervention), "D:/Data/Cleaned/Quantity Weighted/full_lmp_uncapped_quantity_weighted_cleaned.csv")
   
+
+#no qw
+fwrite(weighted_data_uncapped_cleaned %>% select(-qw_lmp, -qw_rrp), "D:/Data/Cleaned/INITIALMW/full_lmp_uncapped_initialmw_cleaned.csv")
+
 #DONE 
 #######################################
