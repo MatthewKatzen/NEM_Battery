@@ -1,4 +1,4 @@
-#Results_3.1_Filtered
+#Results_4.1_Capped
 
 ### load packages
 library(tidyverse)
@@ -27,7 +27,7 @@ full_data <- fread("D:/Data/Cleaned/INITIALMW/full_lmp_uncapped_initialmw_cleane
                          TRUE ~ lmp)) %>% 
   mutate(settlementdate = ymd_hms(settlementdate)) %>% 
   group_by(settlementdate) %>% 
-  mutate(qw_lmp = sum(initialmw*lmp)/sum(initialmw)) #add QW_LMP
+  mutate(qw_rrp = sum(initialmw*rrp)/sum(initialmw)) #add QW_rrp
 
 generator_details_AEMO <- fread("D:/Data/RAW/AEMO/Website/generators_and_loads.csv") %>% clean_names() %>% 
   distinct(duid, .keep_all = TRUE)
@@ -35,10 +35,10 @@ generator_details_AEMO <- fread("D:/Data/RAW/AEMO/Website/generators_and_loads.c
 # REGRESSION
 ##################################
 
-reg <- full_data %>% filter(qw_lmp<1000) %>% 
+reg <- full_data %>% 
   group_by(duid) %>% 
   nest() %>% 
-  mutate(model = map(data, ~lm(lmp ~ qw_lmp, data = .)))
+  mutate(model = map(data, ~lm(lmp ~ qw_rrp, data = .)))
 
 reg_coeffs <- reg %>% 
   mutate(alpha = model[[n()]] %>% summary() %>% coefficients() %>% .[1,1],
@@ -50,11 +50,45 @@ reg_coeffs <- reg %>%
 #####################
 
 reg_coeffs %>% 
+  ggplot(aes(x = beta))+
+  geom_histogram()+
+  ggsave("Output/Regressions/Results/QW_RRP/Capped/beta.png", width = 10)
+
+reg_coeffs %>% filter(beta <10)  %>% 
   ggplot(aes(x = beta, fill = fuel_source_descriptor))+
   geom_histogram()+
-  ggsave("Output/Regressions/Results/QW_LMP/Filtered/beta_fueltype.png", width = 10)
+  ggsave("Output/Regressions/Results/QW_RRP/Capped/beta_fueltype.png", width = 10)
 
 reg_coeffs %>% filter(beta <10)  %>% 
   ggplot(aes(x = beta, fill = region))+
   geom_histogram()+
-  ggsave("Output/Regressions/Results/QW_LMP/Filtered/beta_region.png", width = 10)
+  ggsave("Output/Regressions/Results/QW_RRP/Capped/beta_region.png", width = 10)
+
+# INDIVIDUAL PLOTS
+###########################################
+
+top_beta <- reg_coeffs %>% arrange(-beta) %>% distinct(station_name, .keep_all = TRUE) %>% head(n=10)
+bottom_beta <-reg_coeffs %>% arrange(beta) %>% distinct(station_name, .keep_all = TRUE) %>% head(n=10)  
+
+full_data %>% filter(duid %in% top_beta$duid) %>% 
+  ggplot(aes(x = qw_rrp, y = lmp))+
+  geom_point() +
+  facet_wrap(~duid)+
+  labs(title = "Top 10 betas") +
+  ggsave("Output/Regressions/Results/QW_RRP/Capped/top_10_betas.png", width = 10)
+
+full_data %>% filter(duid %in% bottom_beta$duid) %>% 
+  ggplot(aes(x = qw_rrp, y = lmp))+
+  geom_point() +
+  facet_wrap(~duid)+
+  labs(title = "Bottom 10 betas")+
+  ggsave("Output/Regressions/Results/QW_RRP/Capped/bottom_10_betas.png", width = 10)
+
+# QW_RRP table
+###################################
+
+cut(full_data %>% filter(duid == "BLUFF1") %>% .[["qw_rrp"]], 
+    breaks=c(-1000, -100, 0, 100, 1000, 15000)) %>% table() %>% 
+  data.frame() %>% 
+  rename("qw_rrp_range" = ".") %>% 
+  mutate(Percent = round(100*Freq/sum(Freq), 2))

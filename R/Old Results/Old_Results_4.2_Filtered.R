@@ -1,4 +1,4 @@
-#Results_3_QW_LMP
+#Results_4.2_Filtered
 
 ### load packages
 library(tidyverse)
@@ -22,9 +22,12 @@ full_data <- fread("D:/Data/Cleaned/INITIALMW/full_lmp_uncapped_initialmw_cleane
               distinct(duid, .keep_all = TRUE) %>% select(duid, dispatch_type, technology_type_descriptor), by = "duid") %>% 
   filter(dispatch_type == "Generator") %>% #remove loads
   select(-dispatch_type) %>% 
+  mutate(lmp = case_when(lmp<(-1000) ~ (-1000), #cap
+                         lmp>15000 ~ 15000, 
+                         TRUE ~ lmp)) %>% 
   mutate(settlementdate = ymd_hms(settlementdate)) %>% 
   group_by(settlementdate) %>% 
-  mutate(qw_lmp = sum(initialmw*lmp)/sum(initialmw)) #add QW_LMP
+  mutate(qw_rrp = sum(initialmw*rrp)/sum(initialmw)) #add QW_LMP
 
 generator_details_AEMO <- fread("D:/Data/RAW/AEMO/Website/generators_and_loads.csv") %>% clean_names() %>% 
   distinct(duid, .keep_all = TRUE)
@@ -32,10 +35,10 @@ generator_details_AEMO <- fread("D:/Data/RAW/AEMO/Website/generators_and_loads.c
 # REGRESSION
 ##################################
 
-reg <- full_data %>% 
+reg <- full_data %>% filter(qw_rrp<1000) %>% 
   group_by(duid) %>% 
   nest() %>% 
-  mutate(model = map(data, ~lm(lmp ~ qw_lmp, data = .)))
+  mutate(model = map(data, ~lm(lmp ~ qw_rrp, data = .)))
 
 reg_coeffs <- reg %>% 
   mutate(alpha = model[[n()]] %>% summary() %>% coefficients() %>% .[1,1],
@@ -49,19 +52,17 @@ reg_coeffs <- reg %>%
 reg_coeffs %>% 
   ggplot(aes(x = beta))+
   geom_histogram()+
-  ggsave("Output/Regressions/Results/QW_LMP/Uncapped/beta.png", width = 10)
-
-reg_coeffs %>% filter(beta >10)
+  ggsave("Output/Regressions/Results/QW_RRP/Filtered/beta.png", width = 10)
 
 reg_coeffs %>% filter(beta <10)  %>% 
   ggplot(aes(x = beta, fill = fuel_source_descriptor))+
   geom_histogram()+
-  ggsave("Output/Regressions/Results/QW_LMP/Uncapped/beta_fueltype.png", width = 10)
+  ggsave("Output/Regressions/Results/QW_RRP/Filtered/beta_fueltype.png", width = 10)
 
 reg_coeffs %>% filter(beta <10)  %>% 
   ggplot(aes(x = beta, fill = region))+
   geom_histogram()+
-  ggsave("Output/Regressions/Results/QW_LMP/Uncapped/beta_region.png", width = 10)
+  ggsave("Output/Regressions/Results/QW_RRP/Filtered/beta_region.png", width = 10)
 
 # INDIVIDUAL PLOTS
 ###########################################
@@ -69,40 +70,28 @@ reg_coeffs %>% filter(beta <10)  %>%
 top_beta <- reg_coeffs %>% arrange(-beta) %>% distinct(station_name, .keep_all = TRUE) %>% head(n=10)
 bottom_beta <-reg_coeffs %>% arrange(beta) %>% distinct(station_name, .keep_all = TRUE) %>% head(n=10)  
 
-full_data %>% filter(duid %in% top_beta$duid) %>% 
-  ggplot(aes(x = qw_lmp, y = lmp))+
+full_data %>% filter(duid %in% top_beta$duid, qw_rrp<1000) %>% 
+  ggplot(aes(x = qw_rrp, y = lmp))+
   geom_point() +
   facet_wrap(~duid)+
-  labs(title = "Top 10 betas (beta = 4 to 28)") +
-  ggsave("Output/Regressions/Results/QW_LMP/Uncapped/top_10_betas.png", width = 10)
+  labs(title = "Top 10 betas") +
+  ggsave("Output/Regressions/Results/QW_RRP/Filtered/top_10_betas.png", width = 10)
 
-full_data %>% filter(duid %in% bottom_beta$duid) %>% 
-  ggplot(aes(x = qw_lmp, y = lmp))+
+full_data %>% filter(duid %in% bottom_beta$duid, qw_rrp<1000) %>% 
+  ggplot(aes(x = qw_rrp, y = lmp))+
   geom_point() +
   facet_wrap(~duid)+
-  labs(title = "Bottom 10 betas (beta = -2.5 to -0.07)")+
-  ggsave("Output/Regressions/Results/QW_LMP/Uncapped/bottom_10_betas.png", width = 10)
+  labs(title = "Bottom 10 betas")+
+  ggsave("Output/Regressions/Results/QW_RRP/Filtered/bottom_10_betas.png", width = 10)
 
 
-# FINLEYSF
-##############################
+full_data %>% filter(duid %in% bottom_beta$duid[1], qw_rrp<1000) %>% 
+  ggplot(aes(x = qw_rrp, y = lmp)) + 
+  geom_point() +
+  stat_density_2d(aes(fill = ..level..), geom = "polygon") +
+  scale_fill_gradientn(colors = c("#FFEDA0", "#FEB24C", "#F03B20"))
 
-#show outlier skew data
-
-full_data %>% filter(duid == "FINLYSF1") %>% 
-  ggplot(aes(x = qw_lmp, y = lmp))+
-  geom_point() +  
-  geom_smooth(method='lm', formula= y~x)+
-  geom_smooth(data = . %>% filter(lmp > (-1000000)), method='lm', formula= y~x, colour = "red")+
-  facet_wrap(~duid)+
-  labs(title = "Outlier Removal: beta from 28.68 to 0.003")+
-  ggsave("Output/Regressions/Results/QW_LMP/Uncapped/FINLYSF1.png", width = 10)
-
-full_data %>% filter(duid == "FINLYSF1", lmp < (-1000000))
-
-full_data %>% filter(duid == "FINLYSF1") %>% 
-  lm(lmp ~ qw_lmp, data = .)
-
-full_data %>% filter(duid == "FINLYSF1") %>% filter(lmp > (-1000000)) %>% 
-  lm(lmp ~ qw_lmp, data = .)
-
+full_data %>% filter(duid %in% bottom_beta$duid[1], qw_rrp<1000) %>% 
+  ggplot(aes(x = qw_rrp, y = lmp)) + 
+  stat_density_2d(aes(fill = ..level..), geom = "polygon") +
+  scale_fill_gradientn(colors = c("#FFEDA0", "#FEB24C", "#F03B20"))
