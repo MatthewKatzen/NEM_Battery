@@ -84,8 +84,8 @@ f <- function(x, pos) x %>% clean_names() %>%  #only keep half hourly rows
 dispatch <- map_dfr(list.files("D:/Battery/Data/NEMWEB/DISPATCHLOAD",full.names = TRUE)[1:12],
                     ~read_csv_chunked(.,DataFrameCallback$new(f), chunk_size = 2000000, skip=1)) 
 
-fwrite(dispatch, "D:/Battery/Data/NEMWEB/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_unfiltered.csv")
-dispatch <- fread("D:/Battery/Data/NEMWEB/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_unfiltered.csv") 
+fwrite(dispatch, "D:/Battery/Data/Cleaned/FCAS/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_unfiltered.csv")
+dispatch <- fread("D:/Battery/Data/Cleaned/FCAS/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_unfiltered.csv") 
 
 dispatch <- dispatch %>% 
   filter(intervention == 0) %>% #if intervention, keep it and remove int==0)
@@ -94,7 +94,7 @@ dispatch <- dispatch %>%
                names_to = "var") %>% 
   filter(value!=0)
 
-fwrite(dispatch, "D:/Battery/Data/NEMWEB/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_noint.csv")
+fwrite(dispatch, "D:/Battery/Data/Cleaned/FCAS/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_noint.csv")
 
 #price
 f <- function(x, pos) x %>% clean_names() %>%  #only keep half hourly rows
@@ -120,13 +120,13 @@ price <- map_dfr(list.files("D:/Battery/Data/NEMWEB/DISPATCHPRICE",full.names = 
                             region == "SA1" ~ "SA",
                             region == "TAS1" ~ "TAS"))
 
-fwrite(price, "D:/Battery/Data/NEMWEB/DISPATCHPRICE - FCAS/dispatchprice_fcas_2019_noint.csv") 
+fwrite(price, "D:/Battery/Data/Cleaned/FCAS/DISPATCHPRICE - FCAS/dispatchprice_fcas_2019_noint.csv") 
 
 
 ### MERGE DATAFRAMES
 #########################################
-dispatch <- fread("D:/Battery/Data/NEMWEB/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_noint.csv")
-price <- fread("D:/Battery/Data/NEMWEB/DISPATCHPRICE - FCAS/dispatchprice_fcas_2019_noint.csv") 
+dispatch <- fread("D:/Battery/Data/Cleaned/FCAS/DISPATCHLOAD - FCAS/dispatchload_fcas_2019_noint.csv")
+price <- fread("D:/Battery/Data/Cleaned/FCAS/DISPATCHPRICE - FCAS/dispatchprice_fcas_2019_noint.csv") 
 generator_details <- fread("D:/NEM_LMP/Data/Raw/generator_details_cleaned.csv") %>% 
   select(-c(loss_factor, emission_factor, participant)) #keep non-scheduled as some cases(Portland aluminium smelter) can provide fcas
 
@@ -137,12 +137,12 @@ merged <- dispatch %>% left_join(generator_details %>% select(duid, station, reg
   mutate(category = case_when(var %in% c("raisereg", "lowerreg") ~ "reg",
                               TRUE ~ "cont"))
 
-fwrite(merged, "D:/Data/Cleaned/FCAS/fcas_merged_noint.csv")
+fwrite(merged, "D:/Data/Cleaned/FCAS/Merged/fcas_merged_noint.csv")
 
 ### ANALYSIS
 ##########################################################
 
-merged <- fread("D:/Data/Cleaned/FCAS/merged/fcas_merged_noint.csv")
+merged <- fread("D:/Data/Cleaned/FCAS/Merged/fcas_merged_noint.csv")
 
 merged <- merged %>% 
   mutate(rev = value*price/12)
