@@ -1,4 +1,4 @@
-# NEM_Battery
+# NEM_Battery_Old
 
 1. Battery Profitablity (Buy Low Sell High)
 2. Quantity Weighted Regressions for nodes/zones
