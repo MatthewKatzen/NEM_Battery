@@ -168,16 +168,11 @@ merged %>%
 
 #battery only
 merged %>% filter(fuel_type %in% c("Battery (Charge)", "Battery (Discharge)")) %>% 
-  group_by(quarter = lubridate::quarter(settlementdate), category) %>% 
+  group_by(quarter = lubridate::quarter(settlementdate), var) %>% 
   summarise(total_rev = sum(rev)) %>% 
-  ggplot(aes(x = quarter, y = total_rev, fill = category))+
+  ggplot(aes(x = quarter, y = total_rev, fill = var))+
   geom_col()+
-  ggsave("Output/FCAS/Revenue Battery Only by Cat.png")
-
-#histogram of fcas revs 
-merged %>%  
-  ggplot(aes(y = rev, group = fuel_type))+
-  geom_boxplot()
+  ggsave("Output/FCAS/Revenue Battery Only by Var.png")
 
 
 
