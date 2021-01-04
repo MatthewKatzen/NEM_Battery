@@ -10,6 +10,12 @@ season <- function(datetime){
             (month(datetime) %in% c(6:8)) ~ "Winter")
 }
 
+nem_year <- function(datetime){
+  year(datetime - minutes(5))
+}
+nem_month <- function(datetime){
+  month(datetime - minutes(5))
+}
 
 #downlaod data 
 #########################
